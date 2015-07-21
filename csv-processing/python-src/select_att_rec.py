@@ -21,4 +21,4 @@ if __name__ == '__main__':
     outrow.append(row[0])
     outrow.append(row[1])
     outrow.append(row[4])
-    writer.writerow(row)
+    writer.writerow(outrow)
