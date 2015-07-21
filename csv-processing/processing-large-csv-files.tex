@@ -16,6 +16,7 @@
 extendedchars=false,
 language=python,
 basicstyle=\ttfamily,
+keywordstyle=\bf,
 showstringspaces=false,
 tabsize=2,
 numbers=left,
@@ -45,6 +46,7 @@ xleftmargin=0.8cm
 
 \title{一个Linux上用python直接处理csv文件的方法}
 \author{\href{mailto:xtwxy@hotmail.com}{汪兴元}}
+\date{2015 年 7 月 21 日}
 \maketitle
 \abstract{
 我们常常需要处理体积很大的csv数据或日志文件。一般来讲，
@@ -57,7 +59,7 @@ xleftmargin=0.8cm
 数据量不够运作一个Hadoop集群，还得承受其代价。
 
 本文界绍了直接处理csv文件的一套办法，作为另一个数据处理的选项，示例代码用python，
-运行的操作系统为Linux。
+运行的操作系统为Linux，源程序及csv数据文件的编码采用utf8。
 在从原始数据到最终的目标结果，需要组合本文提到的各种算法，才能达到目的。
 通过管道-过滤器连接每一个算法，能够将整个处理算法分而治之，同时得到比较好的性能。
 
@@ -119,12 +121,59 @@ access log，价值不高；又如水温传感器输入的每分钟
 如果能将数据切成能用内部排序的小块，排好序之后，再合并，
 那么我们就可以完成对大数据的排序。
 
-我们不打算从头实现一个大数据排序工具。利用Linux的工具
+我们不打算从头实现一个大数据排序工具。利用Linux的工具\id{sort}来做排序。
+先将csv文件拆分。可以在导出或生成csv的时候，每达到某一固定尺寸就rotate一下，
+当前文件改名，再创建一个新文件当作当前文件。
+
+假设文件已经切成能用内存装下的多个小文件。注意，使用切割工具切文件，
+必须从整行数据的位置断开，否则，切口处的那条数据被切坏了。
+
+对每一个文件，执行\id{sort}。下面的两段代码是在Linux的终端上输入的命令，“\id{\$}”表示
+命令提示符。示例中有两个文件，这里只写了第一个文件的排序，另一个省略。
+\begin{lstlisting}[language=sh]
+$ cat data/att-rec-utf8_part-1.txt \ 
+  | python python-src/select_att_rec.py \ 
+  | sort --field-separator=, --ignore-leading-blanks --stable \ 
+  --key=1.2n,2 --key=2,3 >part-1.csv
+\end{lstlisting}
+此命令先用\id{select\_att\_rec.py}选择所要的列，再对选择的结果排序，之后将结果重定向
+到文件\id{part-1.csv}。所有小文件都排序好之后，再对排序后的文件做merge:
+\begin{lstlisting}[language=sh]
+$ sort --field-separator=, --ignore-leading-blanks --stable \
+  --key=1.2n,2 --key=2,3 -m part-*.csv > merge-sorted.csv
+\end{lstlisting}
+注意在做merge之前，必须先对每个文件排好序；merge时，使用的关键字、分隔符等参
+数必须与\id{sort}的时候所用的参数完全一致。
+
+merge完之后，得到一个已经排好序的大文件。
 
 \section{转换ID字段}
+一般在集成两个系统的数据的时候，需要将两个系统的数据合并起来。但是两个系统的
+数据ID一般是相互独立分配的，因此，如果ID都是同一种类型，比如整数，几乎100\%
+会发生冲突，即不相同的两个对象，其ID相同。即使用字符串之类的做ID，也难以不发
+生冲突。因此必须要建立两个系统间的对象的对应关系。
+
+例如，商品销售网站和库管理系统如果是两套独立的系统，分别由不同的团队开发，
+比如库存管理系统是外购的，商品销售网站是自建的，如果要将两套系统的数据整
+起来合做分析，又没有办法修改系统达到统一，就需要做ID转换。
+
+下面的程序从标准输入读入历史数据，从命令行读取基础数据文件名，加载基础数据到
+字典中，利用基础数据中的$R(ID_{src}, ID_{dest})$关系，做了一个映射。逐行将
+原ID映射到目标ID的方法替换掉ID，实现ID转换的目的。
+\lstinputlisting{python-src/transform_data_id.py}
+
+一般来讲，大多数系统中的某一基础数据对象的ID是可以一次全部装入内存的。比如超市
+的商品ID，虽然可能有数十万条，但是对于现代计算机的内存来讲并不算多。
+
+对于历史记录，其身的ID，或Primary Key的数量大，其总体积有可能单台机器的内存装
+不下。不过一般情况下，需要做转换的必要性往往不大，
+只对其通过Foreign Key引用的基础数据对象的ID有转换的价值。如果实在需要转换，
+使用\ref{inner-join}提到的内连接方法来做大表的连接，再选择所要的字段，包括新ID，
+不选原ID字段即可。
+
 \section{去重复值，\id{distinct()}}
 \section{连接}
-\subsection{内连接}
+\subsection{内连接} \label{inner-join}
 \subsection{左连接}
 \subsection{全外连接}
 \section{过滤数据}
