@@ -1,4 +1,4 @@
-\documentclass[12pt]{article}
+\documentclass[11pt]{article}
 \usepackage[fntef,hyperref,UTF8]{ctexcap}
 \usepackage[a4paper, margin=2cm]{geometry}
 \usepackage{fancyhdr,lastpage}
@@ -17,7 +17,7 @@ extendedchars=false,
 language=python,
 basicstyle=\ttfamily,
 showstringspaces=false,
-tabsize=4,
+tabsize=2,
 numbers=left,
 numbersep=5pt,
 frame=single,
@@ -43,7 +43,7 @@ xleftmargin=0.8cm
 
 \begin{document}
 
-\title{一个直接处理csv文件的方法}
+\title{一个Linux上用python直接处理csv文件的方法}
 \author{\href{mailto:xtwxy@hotmail.com}{汪兴元}}
 \maketitle
 \abstract{
@@ -56,7 +56,8 @@ xleftmargin=0.8cm
 或导入NoSQL中，再使用MapReduce。但是使用类似Hadoop之类的工具又可能太重，
 数据量不够运作一个Hadoop集群，还得承受其代价。
 
-本文界绍了直接处理csv文件的一套办法，作为另一个数据处理的选项，示例代码用python。
+本文界绍了直接处理csv文件的一套办法，作为另一个数据处理的选项，示例代码用python，
+运行的操作系统为Linux。
 在从原始数据到最终的目标结果，需要组合本文提到的各种算法，才能达到目的。
 通过管道-过滤器连接每一个算法，能够将整个处理算法分而治之，同时得到比较好的性能。
 
@@ -80,15 +81,48 @@ csv文件可能存在错误。在正常情况下，csv文件不应存在错误�
     比如健在的人的年龄不能是负数，也不能是数百以上；历史数据中的记录时间不
     可能超过当前的日历时钟。 
 \end{enumerate}
-
+\lstinputlisting{python-src/validate_history_ai.py}
 如果数据是已经通过有严格校验的系统中生成或导出的，原始数据本身无误，
 一般做以上三项检查可以查出
 我们能见到的全部错误。但是如果数据是人工填写或是有故障的机器生成的，
 这三项检查仍不能确保检查出全部错误。
 
+对于错误的数据该如何处理，要视情况而定。有的业务场景，例如Web服务器的
+access log，价值不高；又如水温传感器输入的每分钟
+一次的历史数据，可以丢弃，之后使用插补法补缺；有的场景是不可以这样做的，
+如交易记录，需要重新导出此段数据或人工处理。样例代码中我们采用了丢弃的方法处理。
+
+以上代码没有直接打开csv文件，而是从标准输入中读取文件，处理完毕之后再写到标准
+输出。这样的好处是便于通过管道过滤器连接多个处理进程，避免过高的耦合度。
+本文所有的处理程序都使用管道过滤器连接，不再赘述。
+
+程序中对校验2.和3.未实现，可以练习下。对于机器导出的数据，
+做完1.可以去掉大部分错误。如果不打算实现2.和3.
+
+可以将列数从命令行上读取，成为更通用的子程序。这个作为练习。
+
 \section{选择列}
+原始数据中有可能只有部分列是所要关心的，其它的与要解决的问题无关，可以丢弃。
+因此要选择列，类似SQL语句中的\id{SELECT}所要办的事情。
+样例程序如下所示，这里我们只对第1，3，4，5列感兴趣。
+\lstinputlisting{python-src/select_history_ai.py}
+
+可以将列下标从命令行输入，这样这个程序就成为一个通用的选择程序，而不是仅用于
+示例的场景。这个作为练习。
+
+
 \section{排序}
-\section{去重复值}
+我们对数据做去重、转置、分组、聚集，都需要先对数据排序。因此排序是非常重要的
+功能。不可或缺。
+
+大数据的排序由于无法直接一次装入内存，故必须使用外部排序。
+如果能将数据切成能用内部排序的小块，排好序之后，再合并，
+那么我们就可以完成对大数据的排序。
+
+我们不打算从头实现一个大数据排序工具。利用Linux的工具
+
+\section{转换ID字段}
+\section{去重复值，\id{distinct()}}
 \section{连接}
 \subsection{内连接}
 \subsection{左连接}
