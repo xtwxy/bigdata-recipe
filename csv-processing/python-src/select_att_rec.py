@@ -9,7 +9,7 @@ if __name__ == '__main__':
   infile = sys.stdin
   outfile = sys.stdout
 
-  reader = csv.reader(infile, delimiter=',', quotechar='"', 
+  reader = csv.reader(infile, delimiter='\t', quotechar='"', 
     quoting=csv.QUOTE_ALL, skipinitialspace=True)
   writer = csv.writer(outfile, delimiter=',', quotechar='"', 
     quoting=csv.QUOTE_ALL, skipinitialspace=True)
