@@ -158,7 +158,7 @@ merge完之后，得到一个已经排好序的大文件。
 起来合做分析，又没有办法修改系统达到统一，就需要做ID转换。
 
 下面的程序从标准输入读入历史数据，从命令行读取基础数据文件名，加载基础数据到
-字典中，利用基础数据中的$R(ID_{src}, ID_{dest})$关系，做了一个映射。逐行将
+字典中，利用基础数据中的$R(\mathrm{ID}_{src}, \mathrm{ID}_{dest})$关系，做了一个映射。逐行将
 原ID映射到目标ID的方法替换掉ID，实现ID转换的目的。
 \lstinputlisting{python-src/transform_data_id.py}
 
@@ -171,7 +171,43 @@ merge完之后，得到一个已经排好序的大文件。
 使用\ref{inner-join}提到的内连接方法来做大表的连接，再选择所要的字段，包括新ID，
 不选原ID字段即可。
 
-\section{去重复值，\id{distinct()}}
+这个方法除了可以用于转换ID的场合，还可以用于更换名称。比如，我要将公司员工的
+行为的分析结果公布，但是不想让人知道员工的真实姓名或工号；或者谁购买了伟哥，
+将要商品名换掉。
+
+样例程序中的ID列号、多少列都是hardcode进代码的。可以将关系搞成动态的，从命令行
+读入。设$C_{i_1}, \cdots, C_{i_m}$是从要转换的数据中选出来作为原ID的列，
+$C_{j_1}, \cdots, C_{j_n}$是要转成的目标ID列，$m, n \geqslant 1$。
+则转码可以视为从
+\begin{equation} \label{transform-id}
+\begin{aligned} 
+transform: R_{src} &\to R_{dest} \\
+\mathrm{ID}_{src}(C_{i_1}, \cdots, C_{i_m}) &\mapsto \mathrm{ID}_{dest}(C_{j_1}, \cdots, C_{j_n}) 
+\end{aligned} 
+\end{equation}
+只需要在命令行上输入源ID的列号清单和目标ID的列号清单，
+在程序中，用迭代清单代替硬编码的取列语句即可。将hardcode转为动态，作为练习。
+
+\section{去重复值，整行\id{distinct()}}
+如果在内存中，用\id{set}来装数据，自动去重。但是我们的数据量大，不能装入内存，
+因此直接用\id{set}不行。如果对每个输入值，都去扫描一遍记录，如果共有$n$个记录，
+则对第$1$个记录，要扫描第$2, \cdots, n$共$n-1$个记录；
+对第$2$个记录，要扫描第$3, \cdots, n$共$n-2$个记录，
+对第$n-1$个记录要扫描第$n$个记录共$1$个记录。于是
+一共要扫描文件$n-1$次，转储到文件$n-1$次，其中最后一次是结果，
+中间$n-2$次是临时文件。这个性能相当差。共扫描记录的个次是
+\begin{equation} \label{scan-identical}
+\begin{aligned}
+(n-1) + \cdots + 1 = \frac{1}{2} n (n-1)\text{。} 
+\end{aligned} 
+\end{equation}
+csv文件每行的长度不固定，因此，定位记录的位置很难，往往扫描的记录数是$n^2$。
+
+如果将数据先排序，则相同的两条记录会相邻，成为一组，于是，我们只需要比较相邻
+的两条数据是否相同，如果相同就丢弃一条，如果不同就输出这一条。示例代码如下，
+假设数据事先已经排好序。
+\lstinputlisting{python-src/remove_duplicate.py}
+
 \section{连接}
 \subsection{内连接} \label{inner-join}
 \subsection{左连接}
@@ -183,9 +219,9 @@ merge完之后，得到一个已经排好序的大文件。
 \subsubsection{OR}
 \subsubsection{优先级}
 \section{聚集}
-\subsection{\id{max()}, \id{min()}, \id{avg()}}
-\subsection{\kw{group by}, \kw{having}}
+\subsection{\kw{group by}}
 \subsection{\kw{having}}
+\subsection{\id{max()}, \id{min()}, \id{avg()}}
 \section{补缺失值}
 
 \section{转置}
