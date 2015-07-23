@@ -269,7 +269,127 @@ csv文件每行的长度不固定，因此，定位记录的位置很难，往�
 从性能上考虑，办法2. 较优。
 
 \section{过滤数据}
+筛选满足条件的数据是信息检索中必不可少的部分。将用户的Search Criteria转成过滤
+数据的Predicate。Search Criteria可能包含多个条件，为了简化问题，需要将每个条件
+做成一个Predicate，只做一项测试，多个条件需要多个Predicate，并且每个Predicate
+之间可能是AND，也可能是OR，并且有优先级顺序要求。
+
 \subsection{谓词及表示方法}
+谓词是一个返回Boolean值的表达式，用于测试对象的性质是否为真，或对象之间的关系
+是否为真。
+
+例如测试订单是否用银行卡支付；帐户余额是否大于100块；$a$同学的考试分数是否比$b$
+同学的高，等等。
+\begin{lstlisting}
+for row in input:
+  if predicate.test(row):
+    output.writerow(row)
+\end{lstlisting}
+如果只测试其中的某列或几列，也可以如此：
+\begin{lstlisting}
+for row in input:
+  if predicate.test(tuple([row[0], row[2]])):
+    output.writerow(row)
+\end{lstlisting}
+
+经验不多的开发者在写过滤条件时，往往不注意将各谓词分解为基本的形式，并且与其它过滤条件，
+可能还与过滤数据无关的问题，合并一起解决。这样一来，大片的其它逻辑与谓词测试的内容混
+合在一起，修改起来要同时考虑多个问题。
+
+这样在问题不太复杂的时候问题不大，而且可能性能比分离关注点来考虑更简单。
+在解决一个较大的问题的时候，往往复杂到做不下去。
+
+例如，使用的“Predicate”并不返回Boolean值，而是直接返回满足测试条件的数据，
+并且做了处理，列数，字段的含义都可能已经变了，
+因为恰好下一步也需要这个数据，这是常见的问题之一。例如，
+\begin{lstlisting}
+for row in input:
+  result = predicate.test(row):
+  if result != None:
+    output.writerow(result)
+\end{lstlisting}
+上面的代码中，\id{result == row}未必能成立。光看这段代码，
+天知道\id{predicate.test(row)}里面做了什么。
+
+做Predicate的时候要把握以下原则：
+\begin{enumerate}
+  \item Predicate只测试数据是否满足所指定的条件，满足反回True，不满足返回False。
+    不能更改输入的数据。
+
+  \item 不做与指定的测试无关的任何其它工作，例如，提取数据，计算平均值之类。
+    如果所需要做的其它工作与测试结果有关，应交给Predicate的使用者来完成；
+    如果无关，则更应分开来做，既不能在Predicate里做，又不能在Predicate的使用
+    者里面做。
+
+  \item Predicate不能有状态。其返回值仅取决于输入的条件，包括数据和测试条件。
+    重复测试同一条数据，得到的结果应相同。
+    如果使用lambda或闭包，其中捕获的参数不应发生变化。
+ 
+\end{enumerate}
+
+下面对这3条举例说明。
+
+{\bf 原则1}. 可能出于下一步的数据处理方便的目的，在当前Predicate中对输入数据作调整，
+容易实现，又比较方便。这样做，从名义上，Predicate只做测试，而不作修改，
+而事实上却做修改，容易误导代码的读者；而且关注点不分离，引起复杂度上升，
+例如，如果下阶段增加了一个Predicate需要没有修改的数据，这样就有矛盾了：
+如果去掉原Predicate对数据的更改，则后面的处理不能正常运行，也要改。
+
+{\bf 原则2}. 例如，有人做了一个比较大小的Predicate，用于扫描csv文件是否为升序，
+通过比较第$n$条和第$n+1$条数据的大小。因此，可以顺便用来统计csv文件的行数。
+假设数据满足升序条件，对每一条数据都做了扫描。
+
+如果csv文件总共有$N$条数据，Predicate将会被调用$N-1$次。反过来，如果Predicate
+被调用了$N-1$次，那么csv文件的行数应是$N$行。
+
+假设文件既不满足升序，又不满足降序，那么在中间某一位置$k$，Predicate返回False，测试
+终止，这时候Predicate统计的行数只能是前面有$k+1$条数据满足条件，这个与行数不符。
+
+另有一排序功能需要用到比较的Predicate，于是该Predicate直接被用于排序，但排序
+会用到多少次比较与数据的条数的关系不是这样的，于是这个行数统计毫无意义。
+
+{\bf 原则3}. 例如比较大小。如果$a > b$，第一次测试\id{greaterPred.test(a, b) == True}
+应能成立，而且无论做多少次测试，只要$a, b$保持原值，
+\id{greaterPred.test(a, b) == True}必须都成立。
+
+如果使用闭包，捕获的参数可能是引用一个闭包外的对象。由于这个对象不是常量，
+且有并发访问，这个对象的状态可能会被修改，引起闭包的状态也随之变更。
+这样一来，闭包的Test Criteria就变了，使用同样的数据做测试，返回值可能会与
+改变前不同。
+    
+谓词分两种类型的：Unary和Binary。前者只需要输入一条数据，后者需要两条。
+其它类型的可以通过这两类组合运算，或者将数据整合得到。
+\begin{lstlisting}
+def LE(a, b):
+  return a <= b
+
+pred = lambda x : LE(x, 10)
+
+for row in inputFile:
+  if pred(row):
+    writer.writerow(row)
+\end{lstlisting}
+
+测试一条数据中的某一属性是否为真，可以用Unary。某些情况看似需要两个数据输入的，
+也可以用Unary，但是使用lambda或闭包。例如，测试一个数是否大于某个常数，
+需要比较两个数，但是常数可以使用lambda和一个\id{LE()}函数来捕获，这样，
+得到的lambda对象只需要输入一个数。而对于检查顺序是否升序这种情况，
+要比较的两个对象没有一个常量，因此直接用二元的\id{LE()}函数。
+\begin{lstlisting}
+def isAscending(l):
+  n = None
+  for i in l:
+    if n is not None:
+      if not LE(n, i):
+        return False
+    n = i
+  return True    
+\end{lstlisting}
+对于Predicate的接口形式，只要使用起来方便即可。如果过滤数据的时候用到了很多个
+Predicate，每个Predicate最好按类型统一接口，这样可以用一致的方法处理；
+这些Predicate最好组合成一个Predicate，能一次做完全部的测试，以便调用者在使用时，
+不必关注Predicate之间的关系细节，只需关注它满足或不满足条件。
+
 \subsection{谓词的连接关系}
 \subsubsection{AND}
 \subsubsection{OR}
