@@ -471,8 +471,8 @@ for row in inputFile:
     if not p(row):
       match = False
       break
-    if match:
-      writer.writerow(row)
+  if match:
+    writer.writerow(row)
 \end{lstlisting}
 但是如果我们的Predicate并不都是用AND来连接的，那么这办法处理AND就不太好。
 如果我们不加处理地直接使用Predicate，又要处理好它们的关系，
