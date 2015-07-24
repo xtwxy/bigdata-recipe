@@ -390,12 +390,13 @@ def isAscending(l):
 程序的分支数比较多。如果这样写，分支总数没有变，但是每个子程序的分支数少了：
 \begin{lstlisting}
 class LEPreviousPred():
-  self.prev = None
+  def __init__(self):
+    self.prev = None
   def test(x):
     old = self.prev
     self.prev = x
     if self.prev is not None:
-      return LE(old, x):
+      return LE(old, x)
     return False
       
 def isAscending(l):
@@ -421,6 +422,15 @@ def isAscending(l):
   也就是2.中单条件\kw{if}语句所要测试的终极条件。
 \end{enumerate}
 
+而且此代码与前面原则3.不符。类似还有与时钟相关的测试，例如检测某事件发生的时
+刻与当前时间的差距是否在某一范围内。由于时钟一直在走，必须每次都要取当前时间，
+而其它的测试不必，这样在形式上不能统一，需要增加处理的复杂度。如果将取时钟
+的动作放在Predicate内，则只需要将数据行送到Predicate作测试即可，成为一元Predicate。
+
+这类测试的Predicate可以做成满足或不满足
+原则3.形式。如果能大幅度简化程序或提高性能，并且不降底可读性的情况下可以
+考虑不遵守，但是如果没有换取足够的好处，不应违反原则。
+
 对于Predicate的接口形式，只要使用起来方便即可，使用lambda、普通函数、
 类实例都可以。如果过滤数据的时候用到了很多个
 Predicate，每个Predicate最好按类型统一接口，这样形式上保持一致，
@@ -442,7 +452,53 @@ Predicate，每个Predicate最好按类型统一接口，这样形式上保持�
 
 
 \subsection{谓词的连接关系}
+前面已经提到Predicate的表示及如何使用。实际的数据过滤程序中，很少用到单一
+Predicate。最基本的组合关系就是AND和OR加上优先级。
+
+组合关系，本身就是
+另一重Predicate。比如在$n$个Predicate $P_1, \cdots, P_n$中，至少有$m$个为True，
+则Predicate $P$为True。因此，除测试$P_i \in {P_1, \cdots, P_n}$以外，还要
+测试为True的$P_i$的个数是否不小于$m$。此类Predicate层出不穷，需要随业务需求而定，
+不能一一列举，我们只列最基本的形式。
+
 \subsubsection{AND}
+必须每个Predicate返回True才算满足条件。下面是示例代码，注意如果\id{predicates}
+是空列表的时候，所有数据都匹配，要考查这是否为预期的行为。
+\begin{lstlisting}
+for row in inputFile:
+  match = True
+  for p in predicates:
+    if not p(row):
+      match = False
+      break
+    if match:
+      writer.writerow(row)
+\end{lstlisting}
+但是如果我们的Predicate并不都是用AND来连接的，那么这办法处理AND就不太好。
+如果我们不加处理地直接使用Predicate，又要处理好它们的关系，
+我们需要复杂的逻辑结构来利用这些Predicate，而且越复杂，越难实现，越难修改。
+
+最好的办法是不影响过滤程序的结构，只改Predicate及其关系。我们将上面的代码改成
+下面的形式：
+\begin{lstlisting}
+class AND():
+  def __init__(self, predicates):
+    self.predicates = predicates
+
+  def test(row):
+    for p in self.predicates:
+      if not p(row):
+        return False
+    return True
+
+andAll = AND(predList)
+andAllPred = lambda x : andAll.test(x)
+
+for row in inputFile:
+  if andAllPred(row):
+    writer.writerow(row)
+\end{lstlisting}
+主程序就仅剩第$14 \sim 16$行这三行。不管我们的条件如何，程序的结构应是如此。
 \subsubsection{OR}
 \subsubsection{优先级}
 \section{聚集}
