@@ -311,7 +311,7 @@ for row in input:
 上面的代码中，\id{result == row}未必能成立。光看这段代码，
 天知道\id{predicate.test(row)}里面做了什么。
 
-做Predicate的时候要把握以下原则：
+做Predicate的时候要把握以下原则，这些原则一般情况下应当尊守：
 \begin{enumerate}
   \item Predicate只测试数据是否满足所指定的条件，满足反回True，不满足返回False。
     不能更改输入的数据。
@@ -385,10 +385,61 @@ def isAscending(l):
     n = i
   return True    
 \end{lstlisting}
-对于Predicate的接口形式，只要使用起来方便即可。如果过滤数据的时候用到了很多个
-Predicate，每个Predicate最好按类型统一接口，这样可以用一致的方法处理；
-这些Predicate最好组合成一个Predicate，能一次做完全部的测试，以便调用者在使用时，
+
+以上代码有几个问题：假定每一行数据都不能是空行；有一个状态量\id{n}，使得
+程序的分支数比较多。如果这样写，分支总数没有变，但是每个子程序的分支数少了：
+\begin{lstlisting}
+class LEPreviousPred():
+  self.prev = None
+  def test(x):
+    old = self.prev
+    self.prev = x
+    if self.prev is not None:
+      return LE(old, x):
+    return False
+      
+def isAscending(l):
+  pred = LEPreviousPred()
+  lePrevious = lambda x : pred.test(x)
+  for i in l:
+    if not lePrevious(i):
+      return False
+    n = i
+  return True    
+\end{lstlisting}
+
+就这个例子而言，除了\id{isAscending()}函数简化了一丁点，
+这个做法总代码行数还多了，不划算。但是这个代码演示了将Predicate的测试逻辑与
+调用者分离的一种办法。
+
+在有较多Predicate一起参与的时候，程序逻辑势必复杂，这样一来，问题分成3份：
+
+\begin{enumerate}
+  \item 单个基本Predicate本身的实现。这个与实际要做的过滤程序程序的复杂度没有关系。
+  \item 使用Predicate的过滤程序。这个程序只有一个单条件的\kw{if}测试。
+  \item 多个基本的Predicate的组合，成为整个过滤子程序的Predicate，
+  也就是2.中单条件\kw{if}语句所要测试的终极条件。
+\end{enumerate}
+
+对于Predicate的接口形式，只要使用起来方便即可，使用lambda、普通函数、
+类实例都可以。如果过滤数据的时候用到了很多个
+Predicate，每个Predicate最好按类型统一接口，这样形式上保持一致，
+可以用一致的方法处理；这些Predicate最好组合成一个Predicate，
+能一次做完全部的测试，以便调用者在使用时，
 不必关注Predicate之间的关系细节，只需关注它满足或不满足条件。
+
+同时使用多个Predicate可以减少扫描文件的次数，但是，是否要分几次扫描文件，
+要视情况而定。以下情况，如果用到Predicate，最好分步骤，一次只做一件事；
+而且，不能与纯粹的条件过滤一起做。一般条件过滤只测试一行数据，且不改变这行数据。
+
+\begin{enumerate}
+  \item 去重复值。需要一次处理两行。
+  \item 聚集。需要按Group处理，Group内都是多行。
+  \item 根据输入列，计算其他列的值。输出的行与输入行不一样。
+\end{enumerate}
+
+主要问题是一起做会大幅度增加代码的复杂度，使得可读性、可维护性降底。
+
 
 \subsection{谓词的连接关系}
 \subsubsection{AND}
