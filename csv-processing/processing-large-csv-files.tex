@@ -462,7 +462,7 @@ Predicate。最基本的组合关系就是AND和OR加上优先级。
 不能一一列举，我们只列最基本的形式。
 
 \subsubsection{AND}
-必须每个Predicate返回True才算满足条件。直接使用编程语言的“或”运算符的版本不举例。
+必须每个Predicate返回True才算满足条件。直接使用编程语言的“与”运算符的版本不举例。
 下面是支持多个Predicate的示例代码，注意如果\id{predicates}
 是空列表的时候，所有数据都匹配，要考查这是否为预期的行为。
 \begin{lstlisting}
@@ -500,7 +500,15 @@ for row in inputFile:
     writer.writerow(row)
 \end{lstlisting}
 主程序就仅剩第$14 \sim 16$行这三行。不管我们的条件如何，程序的结构应是如此。
+
+是直接使用编程语言的“与”运算符，还是使用一个Predicate列表，要视复杂程度而定。
+如果条件不多，应直接使用编程语言的逻辑运算符，或部分使用，
+避免过度工程，吃力不讨好；
+如果逻辑复杂，则全部使用本小节的办法。
+分寸的拿捏要看实现的难度和程序的可读性，在两者之间取得平衡。
+
 \subsubsection{OR}
+
 类似AND连接，OR的直接实现代码如下：
 \begin{lstlisting}
 for row in inputFile:
@@ -581,6 +589,35 @@ for row in inputFile:
 如果正在处理的行不属于当前group则应计算当前group的聚集并输出，
 再用当前行重新开一个group作为当前group。
 由于做了group检测，所以不必再做去重这一步。
+\begin{lstlisting}
+class IsInGroup():
+  def __init__(self, colnumbers):
+    self.colnumbers = colnumbers
+    self.curRow = None  
+
+  def test(row):
+    prevRow = self.curRow
+    self.curRow = row
+
+    if prevRow is None:
+      return False
+      
+    for colno in colnumbers:
+      if not (prevRow[colno] == row[colno]):
+        return False
+    return True
+
+groupByColumnNumbers = [0, 2]
+isInGroup = IsInGroup(groupByColumnNumbers)
+isInGroupTest = lambda x : isInGroup.test(x)    
+
+for row in inputFile:
+  if isInGroupTest(row):
+    ...
+\end{lstlisting}
+
+\section{聚集}
+
  
 \subsection{\kw{having}}
 SQL语句的\kw{where}子句不能用于聚集函数，只能用于表或视图的列。
@@ -592,6 +629,31 @@ SQL可以用\kw{having}来对聚集列做过滤。
 过滤数据用第~\label{sec-filtering}节所述的方法。
 
 \subsection{\id{max()}}
+按前面的\kw{group by}和\kw{having}的方法，实现\id{max()}函数的功能。示例代码如下：
+\begin{lstlisting}
+def getGroupByCols(row, colNumbers):
+  groupCols = []
+  for colno in colNumbers:
+    groupCols.append(row[colno])
+  return groupCols
+
+col4max = 1
+max = None
+for row in inputFile:
+  if isInGroupTest(row):
+    if row[col4max] > max:
+      max = row[col4max]
+  else:
+    outrow = getGroupByCols(row, groupByColumnNumbers)
+    outrow.append(max)
+    max = None
+    writer.writerow(outrow)
+\end{lstlisting}
+
+可以将上面的代码重构为通用的\id{max()}子程序。变化点在\kw{group by}的列号表
+和要\id{max()}的列号。作为练习。 
+
+本文中余下的其它聚集函数可以用类似的办法实现。
 \subsection{\id{min()}}
 \subsection{\id{avg()}}
 \subsection{\id{count()}}
