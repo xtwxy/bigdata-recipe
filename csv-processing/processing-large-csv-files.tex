@@ -113,7 +113,7 @@ access log，价值不高；又如水温传感器输入的每分钟
 示例的场景。这个作为练习。
 
 
-\section{排序}
+\section{排序} \label{sec-sort}
 我们对数据做去重、转置、分组、聚集，都需要先对数据排序。因此排序是非常重要的
 功能。不可或缺。
 
@@ -188,7 +188,7 @@ transform: R_{src} &\to R_{dest} \\
 只需要在命令行上输入源ID的列号清单和目标ID的列号清单，
 在程序中，用迭代清单代替硬编码的取列语句即可。将hardcode转为动态，作为练习。
 
-\section{去重复值，整行\id{distinct()}}
+\section{去重复值，整行\id{distinct()}} \label{sec-remove-duplicate}
 如果在内存中，用\id{set}来装数据，自动去重。但是我们的数据量大，不能装入内存，
 因此直接用\id{set}不行。如果对每个输入值，都去扫描一遍记录，如果共有$n$个记录，
 则对第$1$个记录，要扫描第$2, \cdots, n$共$n-1$个记录；
@@ -268,7 +268,7 @@ csv文件每行的长度不固定，因此，定位记录的位置很难，往�
 
 从性能上考虑，办法2. 较优。
 
-\section{过滤数据}
+\section{过滤数据} \label{sec-filtering}
 筛选满足条件的数据是信息检索中必不可少的部分。将用户的Search Criteria转成过滤
 数据的Predicate。Search Criteria可能包含多个条件，为了简化问题，需要将每个条件
 做成一个Predicate，只做一项测试，多个条件需要多个Predicate，并且每个Predicate
@@ -462,7 +462,8 @@ Predicate。最基本的组合关系就是AND和OR加上优先级。
 不能一一列举，我们只列最基本的形式。
 
 \subsubsection{AND}
-必须每个Predicate返回True才算满足条件。下面是示例代码，注意如果\id{predicates}
+必须每个Predicate返回True才算满足条件。直接使用编程语言的“或”运算符的版本不举例。
+下面是支持多个Predicate的示例代码，注意如果\id{predicates}
 是空列表的时候，所有数据都匹配，要考查这是否为预期的行为。
 \begin{lstlisting}
 for row in inputFile:
@@ -500,11 +501,104 @@ for row in inputFile:
 \end{lstlisting}
 主程序就仅剩第$14 \sim 16$行这三行。不管我们的条件如何，程序的结构应是如此。
 \subsubsection{OR}
+类似AND连接，OR的直接实现代码如下：
+\begin{lstlisting}
+for row in inputFile:
+  match = False
+  for p in predicates:
+    if p(row):
+      match = True
+      break
+  if match:
+    writer.writerow(row)
+\end{lstlisting}
+
+同样，如果要解耦Predicate和过滤程序的关系，代码如下：
+\begin{lstlisting}
+class OR():
+  def __init__(self, predicates):
+    self.predicates = predicates
+
+  def test(row):
+    for p in self.predicates:
+      if p(row):
+        return True
+    return False
+
+orAll = OR(predList)
+orAllPred = lambda x : orAll.test(x)
+
+for row in inputFile:
+  if orAllPred(row):
+    writer.writerow(row)
+\end{lstlisting}
+
 \subsubsection{优先级}
+从前面的利用AND和OR组合Predicate的例子，我们知道组合后的结果可以表达为一个
+Predicate。同理，优先级高的Predicate先运算，可以将它们做成一个Predicate再参与
+运算。如果要求当前的表达式的值，参与当前表达式运算的Predicate或表达式必须先求
+值，于是，优先级就实现了。
+例如，我们要实现$(A \land B) \lor (C \land D) $，可以用下面的代码：
+\begin{lstlisting}
+andAB =  AND([A, B])
+andCD =  AND([C, D])
+andABPred = lambda x : andAB.test(x)
+andCDPred = lambda x : andCD.test(x)
+
+orAll = OR([andABPred, andCDPred])
+orAllPred = lambda x : orAll.test(x)
+
+for row in inputFile:
+  if orAllPred(row):
+    writer.writerow(row)
+\end{lstlisting}
+
 \section{聚集}
+关于骤集函数的定义，参考\href{https://en.wikipedia.org/wiki/Aggregate\_function}{https://en.wikipedia.org/wiki/Aggregate\_function}。
+
+要理解聚集，必须先搞清楚分组。聚集一般是按分组的，例如，找出每个班中数学考试
+分数最高的，就是按班级分组，找出每个班的最高分，有多少个班就有多少个最高分；
+除非全班旷考，或者存在无人的班级---有这可能性？
+如果不指定分组条件，将是全部学生中最高的，只有最多一个数值。
+
 \subsection{\kw{group by}}
+在SQL中的\kw{order by}子句一般出现在带有聚集运算的\kw{select}语句尾部。
+一般写SQL的时候，如果没有使用聚集函数，又用到了\kw{group by}子句，只有选择的列与
+\kw{group by}的列数相同的时候是没有问题的，其它选择会报错。
+
+使用SQL语句\kw{group by}的结果未必是同时\kw{order by}那些\kw{group by}所指定的那些列的，
+只保证每一个group内部的行都相邻。
+如果不指定\kw{order by}，RDBMS会使用最有效率的方法\kw{group by}。
+
+然而RDBMS高效\kw{group by}的方法，我们在python代码中用起来不容易，不现实。
+我们为了让同一group的行都在一起，我们先将数据按\kw{group by}列\kw{order by}，即先排序，
+用前面第~\ref{sec-sort}节提到的Linux的\id{sort}。
+
+如果没有用聚集函数，排完序之后，要除掉重复行。
+使用第~\ref{sec-remove-duplicate}节的方法去除重复行。
+
+如果使用了聚集，则在使用聚集函数的同时，必须检查每行是否是同一group。
+如果正在处理的行不属于当前group则应计算当前group的聚集并输出，
+再用当前行重新开一个group作为当前group。
+由于做了group检测，所以不必再做去重这一步。
+ 
 \subsection{\kw{having}}
-\subsection{\id{max()}, \id{min()}, \id{avg()}}
+SQL语句的\kw{where}子句不能用于聚集函数，只能用于表或视图的列。
+SQL可以用\kw{having}来对聚集列做过滤。
+
+我们在处理csv文件的时候，没有必须做此区别的限制。我们可以在输出聚集的结果之前，
+对结果做过滤，也可以单独设一过滤环节，用管道连接到聚集的输出。
+
+过滤数据用第~\label{sec-filtering}节所述的方法。
+
+\subsection{\id{max()}}
+\subsection{\id{min()}}
+\subsection{\id{avg()}}
+\subsection{\id{count()}}
+\subsection{\id{sum()}}
+%\subsection{\id{median()}}
+%\subsection{\id{mode()}}
+
 \section{补缺失值}
 
 \section{转置}
